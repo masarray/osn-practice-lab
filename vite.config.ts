@@ -6,6 +6,7 @@ export default defineConfig({
   base: './',
   build: {
     target: 'es2020',
-    sourcemap: false
+    sourcemap: false,
+    chunkSizeWarningLimit: 800
   }
 });

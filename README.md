@@ -17,7 +17,7 @@ Fokus project:
 
 ## Status v0.3
 
-- 180 soal original OSN-style:
+- 360 soal original OSN-style:
   - 60 Matematika
   - 60 IPA
   - 60 IPS
@@ -25,7 +25,7 @@ Fokus project:
 - Daily Mission 10 soal
 - Try Again soal salah
 - Adventure Map per topik
-- Reward Room: Basketball mini game
+- Reward Room: Jewel Splash match-3 mini game
 - LocalStorage progress
 - PWA manifest + service worker sederhana
 - GitHub Actions deploy workflow
@@ -92,3 +92,30 @@ Mini game hanya diposisikan sebagai reward pendek setelah belajar, bukan pusat a
 - Dashboard perkembangan lebih detail.
 - Spaced repetition queue yang lebih cerdas.
 - Bank soal 200+ per mata pelajaran.
+
+
+## v0.7 Update
+
+Child-friendly UX upgrade:
+
+- More colorful premium playful interface
+- Original sticker/emoji-based visual language
+- Admin Lab for end-to-end testing
+- Reward Room game picker
+- Three original mini games: Jewel Splash, Memory Match, Bridge Quest
+- Healthier reward loop: games are unlocked after learning, not used as the main app entry point
+
+Admin Lab is accessible from the Home screen.
+
+See `docs/CHILD_UX_AND_GAME_STRATEGY.md` for the child UX and game design policy.
+
+
+## v0.7 update
+
+- Expanded question bank to 360 original OSN-style questions: 120 Matematika, 120 IPA, 120 IPS.
+- Rebuilt Reward Room primary game into animated Jewel Splash match-3 with swap, pop, combo, and falling jewel transitions.
+- Added Web Audio based interaction sounds for tap, start, match, fall, miss, reward, and star reveal.
+- Added reward celebration overlay after finishing a mission: star reveal, chime sequence, and ticket feedback.
+- Improved clickable-card interaction depth: stronger hover lift, press compression, shimmer, and higher readable font weight.
+
+The app still avoids shipping copied official OSN questions in the public repository. The question bank is original OSN-style training content.
