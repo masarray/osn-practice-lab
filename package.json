@@ -1,9 +1,9 @@
 {
   "name": "osn-practice-lab",
   "private": true,
-  "version": "0.7.0",
+  "version": "1.0.0",
   "type": "module",
-  "description": "OSN-style SD CBT practice web app with child-friendly quest UX, expanded question bank, sound effects, reward celebration, animated Jewel Splash mini game, admin lab, and GitHub Pages deployment.",
+  "description": "OSN-style SD CBT practice app with audited playable match-3 game, Sour Gummy child UX, 600-question bank, sound effects, and reward celebration.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { allQuestions, bankStats, getQuestionsBySubject, getTopics, subjects } from './data';
 import type { AnswerKey, ExamConfig, ExamQuestion, ExamSession, Question, ResultRecord, ReviewItem, SessionMode, Subject } from './types';
 
-const STORAGE_KEY = 'osn-practice-lab-results-v0.6';
+const STORAGE_KEY = 'osn-practice-lab-results-v1.0';
 
 type Screen = 'home' | 'exam' | 'result' | 'reward' | 'admin';
 type GameKey = 'jewel' | 'memory' | 'bridge';
@@ -207,6 +207,17 @@ function App() {
   const [result, setResult] = useState<ResultRecord | null>(null);
   const [reviewOpen, setReviewOpen] = useState(false);
   const [celebration, setCelebration] = useState<CelebrationState | null>(null);
+
+  useEffect(() => {
+    const handler = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const clickable = target.closest('button, a, select, input');
+      if (clickable && !(clickable as HTMLElement).classList.contains('native-cell')) playSound('tap');
+    };
+    document.addEventListener('pointerdown', handler, { capture: true });
+    return () => document.removeEventListener('pointerdown', handler, { capture: true });
+  }, []);
 
   useEffect(() => saveProgress(progress), [progress]);
 
@@ -706,180 +717,367 @@ function RewardRoom({ tickets, freePlay, onUseTicket, onHome }: { tickets: numbe
 
 
 function JewelGame({ playing, onDone }: { playing: boolean; onDone: () => void }) {
-  const SIZE = 8;
+  const COLS = 8;
+  const ROWS = 8;
   const TYPES = 5;
   const START_MOVES = 30;
-  type Cell = { type: number; id: string };
+  const MATCH_MIN = 3;
+
+  type Cell = { type: number | null; el: HTMLDivElement };
   type Pos = { r: number; c: number };
 
-  const makeCell = (type?: number): Cell => ({ type: type ?? Math.floor(Math.random() * TYPES), id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` });
-
-  const findMatches = (board: Cell[][]) => {
-    const keys = new Set<string>();
-    for (let r = 0; r < SIZE; r += 1) {
-      let run = 1;
-      for (let c = 1; c <= SIZE; c += 1) {
-        const prev = board[r][c - 1]?.type;
-        const curr = c < SIZE ? board[r][c]?.type : -1;
-        if (curr === prev) run += 1;
-        else {
-          if (run >= 3) {
-            for (let i = c - run; i < c; i += 1) keys.add(`${r}-${i}`);
-          }
-          run = 1;
-        }
-      }
-    }
-    for (let c = 0; c < SIZE; c += 1) {
-      let run = 1;
-      for (let r = 1; r <= SIZE; r += 1) {
-        const prev = board[r - 1][c]?.type;
-        const curr = r < SIZE ? board[r][c]?.type : -1;
-        if (curr === prev) run += 1;
-        else {
-          if (run >= 3) {
-            for (let i = r - run; i < r; i += 1) keys.add(`${i}-${c}`);
-          }
-          run = 1;
-        }
-      }
-    }
-    return keys;
-  };
-
-  const cloneBoard = (board: Cell[][]) => board.map((row) => row.map((cell) => ({ ...cell })));
-
-  const swapAt = (board: Cell[][], a: Pos, b: Pos) => {
-    const next = cloneBoard(board);
-    [next[a.r][a.c], next[b.r][b.c]] = [next[b.r][b.c], next[a.r][a.c]];
-    return next;
-  };
-
-  const collapseBoard = (board: Cell[][], matches: Set<string>) => {
-    const next = cloneBoard(board);
-    for (const key of matches) {
-      const [r, c] = key.split('-').map(Number);
-      (next[r] as (Cell | null)[])[c] = null;
-    }
-    for (let c = 0; c < SIZE; c += 1) {
-      const survivors: Cell[] = [];
-      for (let r = SIZE - 1; r >= 0; r -= 1) {
-        const cell = next[r][c] as Cell | null;
-        if (cell) survivors.push(cell);
-      }
-      for (let r = SIZE - 1; r >= 0; r -= 1) {
-        next[r][c] = survivors[SIZE - 1 - r] ?? makeCell();
-      }
-    }
-    return next as Cell[][];
-  };
-
-  const createBoard = () => {
-    let board: Cell[][] = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => makeCell()));
-    while (findMatches(board).size > 0) {
-      board = Array.from({ length: SIZE }, () => Array.from({ length: SIZE }, () => makeCell()));
-    }
-    return board;
-  };
-
-  const [board, setBoard] = useState<Cell[][]>(() => createBoard());
-  const [selected, setSelected] = useState<Pos | null>(null);
+  const boardEl = useRef<HTMLDivElement | null>(null);
+  const boardRef = useRef<Cell[][]>([]);
+  const selectedRef = useRef<Pos | null>(null);
+  const busyRef = useRef(false);
+  const playingRef = useRef(false);
   const [score, setScore] = useState(0);
   const [moves, setMoves] = useState(START_MOVES);
   const [timeLeft, setTimeLeft] = useState(45);
-  const [message, setMessage] = useState('Pilih dua permata yang berdampingan.');
-  const [matchFlash, setMatchFlash] = useState<Set<string>>(new Set());
+  const [message, setMessage] = useState('Tekan Main, lalu pilih dua permata yang berdampingan.');
+  const [comboText, setComboText] = useState('');
 
   useEffect(() => {
-    if (!playing) {
-      setBoard(createBoard());
-      setSelected(null);
-      setScore(0);
-      setMoves(START_MOVES);
-      setTimeLeft(45);
-      setMessage('Pilih dua permata yang berdampingan.');
-      setMatchFlash(new Set());
+    playingRef.current = playing;
+  }, [playing]);
+
+  const rand = (n: number) => Math.floor(Math.random() * n);
+  const inBounds = (r: number, c: number) => r >= 0 && r < ROWS && c >= 0 && c < COLS;
+  const isAdjacent = (a: Pos, b: Pos) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
+
+  const runAnim = (el: Element, frames: Keyframe[], options: KeyframeAnimationOptions) => {
+    const anim = el.animate(frames, options);
+    return anim.finished.catch(() => undefined);
+  };
+
+  const renderCandy = (cell: Cell) => {
+    cell.el.innerHTML = '';
+    cell.el.classList.remove('jewel-selected', 'jewel-cleared');
+    cell.el.dataset.type = cell.type === null ? '' : String(cell.type);
+    if (cell.type === null) return;
+    const candy = document.createElement('div');
+    candy.className = `native-candy native-gem-${cell.type}`;
+    const shine = document.createElement('span');
+    shine.className = 'native-candy-shine';
+    candy.appendChild(shine);
+    cell.el.appendChild(candy);
+  };
+
+  const visibleType = (cell: Cell) => cell.type;
+
+  const findMatches = () => {
+    const matches = new Set<string>();
+    const board = boardRef.current;
+
+    for (let r = 0; r < ROWS; r += 1) {
+      let runType = visibleType(board[r][0]);
+      let start = 0;
+      for (let c = 1; c <= COLS; c += 1) {
+        const current = c < COLS ? visibleType(board[r][c]) : -999;
+        if (current !== runType) {
+          if (runType !== null && c - start >= MATCH_MIN) {
+            for (let k = start; k < c; k += 1) matches.add(`${r},${k}`);
+          }
+          runType = current;
+          start = c;
+        }
+      }
+    }
+
+    for (let c = 0; c < COLS; c += 1) {
+      let runType = visibleType(board[0][c]);
+      let start = 0;
+      for (let r = 1; r <= ROWS; r += 1) {
+        const current = r < ROWS ? visibleType(board[r][c]) : -999;
+        if (current !== runType) {
+          if (runType !== null && r - start >= MATCH_MIN) {
+            for (let k = start; k < r; k += 1) matches.add(`${k},${c}`);
+          }
+          runType = current;
+          start = r;
+        }
+      }
+    }
+
+    return matches;
+  };
+
+  const clearSelection = () => {
+    const selected = selectedRef.current;
+    if (selected) boardRef.current[selected.r]?.[selected.c]?.el.classList.remove('jewel-selected');
+    selectedRef.current = null;
+  };
+
+  const swapData = (a: Pos, b: Pos) => {
+    const A = boardRef.current[a.r][a.c];
+    const B = boardRef.current[b.r][b.c];
+    [A.type, B.type] = [B.type, A.type];
+    renderCandy(A);
+    renderCandy(B);
+  };
+
+  const animateSwap = async (a: Pos, b: Pos, yoyo = false) => {
+    const A = boardRef.current[a.r][a.c].el;
+    const B = boardRef.current[b.r][b.c].el;
+    const rectA = A.getBoundingClientRect();
+    const rectB = B.getBoundingClientRect();
+    const dx = rectB.left - rectA.left;
+    const dy = rectB.top - rectA.top;
+
+    await Promise.all([
+      runAnim(A, [{ transform: 'translate3d(0,0,0) scale(1)' }, { transform: `translate3d(${dx}px,${dy}px,0) scale(1.06)` }], { duration: 180, easing: 'cubic-bezier(.22,1.25,.36,1)', fill: 'both' }),
+      runAnim(B, [{ transform: 'translate3d(0,0,0) scale(1)' }, { transform: `translate3d(${-dx}px,${-dy}px,0) scale(1.06)` }], { duration: 180, easing: 'cubic-bezier(.22,1.25,.36,1)', fill: 'both' })
+    ]);
+
+    if (yoyo) {
+      await Promise.all([
+        runAnim(A, [{ transform: `translate3d(${dx}px,${dy}px,0) scale(1.04)` }, { transform: 'translate3d(0,0,0) scale(1)' }], { duration: 190, easing: 'cubic-bezier(.42,0,.25,1.45)', fill: 'both' }),
+        runAnim(B, [{ transform: `translate3d(${-dx}px,${-dy}px,0) scale(1.04)` }, { transform: 'translate3d(0,0,0) scale(1)' }], { duration: 190, easing: 'cubic-bezier(.42,0,.25,1.45)', fill: 'both' })
+      ]);
+    }
+
+    A.style.transform = '';
+    B.style.transform = '';
+  };
+
+  const burst = (cell: Cell) => {
+    for (let i = 0; i < 6; i += 1) {
+      const spark = document.createElement('i');
+      spark.className = 'native-jewel-spark';
+      const angle = (Math.PI * 2 * i) / 6;
+      spark.style.setProperty('--x', `${Math.cos(angle) * (18 + rand(14))}px`);
+      spark.style.setProperty('--y', `${Math.sin(angle) * (18 + rand(14))}px`);
+      spark.style.setProperty('--d', `${i * 18}ms`);
+      cell.el.appendChild(spark);
+      window.setTimeout(() => spark.remove(), 520);
+    }
+  };
+
+  const popMatches = async (matches: Set<string>) => {
+    const animations: Promise<unknown>[] = [];
+    matches.forEach((key) => {
+      const [r, c] = key.split(',').map(Number);
+      const cell = boardRef.current[r][c];
+      const candy = cell.el.firstElementChild;
+      cell.el.classList.add('jewel-cleared');
+      burst(cell);
+      if (candy) {
+        animations.push(runAnim(candy, [
+          { transform: 'rotate(45deg) scale(1)', opacity: 1, filter: 'brightness(1)' },
+          { transform: 'rotate(45deg) scale(1.24)', opacity: 1, filter: 'brightness(1.35)' },
+          { transform: 'rotate(45deg) scale(.18)', opacity: 0, filter: 'brightness(1.8)' }
+        ], { duration: 300, easing: 'cubic-bezier(.36,0,.66,-0.56)', fill: 'both' }));
+      }
+    });
+    playSound('match');
+    await Promise.all(animations);
+    matches.forEach((key) => {
+      const [r, c] = key.split(',').map(Number);
+      const cell = boardRef.current[r][c];
+      cell.type = null;
+      renderCandy(cell);
+    });
+  };
+
+  const dropCells = async () => {
+    const animations: Promise<unknown>[] = [];
+
+    for (let c = 0; c < COLS; c += 1) {
+      const types: number[] = [];
+      for (let r = ROWS - 1; r >= 0; r -= 1) {
+        const t = boardRef.current[r][c].type;
+        if (t !== null) types.push(t);
+      }
+
+      for (let r = ROWS - 1; r >= 0; r -= 1) {
+        const existing = boardRef.current[r][c].type;
+        const nextType = types[ROWS - 1 - r] ?? rand(TYPES);
+        const wasEmpty = existing === null || types[ROWS - 1 - r] === undefined;
+        boardRef.current[r][c].type = nextType;
+        renderCandy(boardRef.current[r][c]);
+        const candy = boardRef.current[r][c].el.firstElementChild;
+        if (candy) {
+          animations.push(runAnim(candy, [
+            { transform: `translate3d(0, ${wasEmpty ? -120 - rand(80) : -24}px, 0) rotate(45deg) scale(.84)`, opacity: wasEmpty ? 0 : .95 },
+            { transform: 'translate3d(0, 10px, 0) rotate(45deg) scale(1.05)', opacity: 1, offset: .76 },
+            { transform: 'translate3d(0, 0, 0) rotate(45deg) scale(1)' }
+          ], { duration: wasEmpty ? 420 : 260, easing: 'cubic-bezier(.18, .95, .28, 1.35)', fill: 'both' }));
+        }
+      }
+    }
+
+    playSound('fall');
+    await Promise.all(animations);
+  };
+
+  const resolveBoard = async () => {
+    let combo = 0;
+    let totalScore = 0;
+
+    while (true) {
+      const matches = findMatches();
+      if (!matches.size) break;
+      combo += 1;
+      totalScore += matches.size * 10 * combo;
+      setComboText(combo > 1 ? `COMBO x${combo}` : `+${matches.size * 10}`);
+      await popMatches(matches);
+      await dropCells();
+      await wait(80);
+    }
+
+    if (totalScore > 0) setScore((s) => s + totalScore);
+    setComboText('');
+    return totalScore;
+  };
+
+  const attemptSwap = async (a: Pos, b: Pos) => {
+    if (busyRef.current || !playingRef.current || moves <= 0) return;
+    busyRef.current = true;
+    clearSelection();
+
+    playSound('swap');
+    await animateSwap(a, b);
+    swapData(a, b);
+
+    const matches = findMatches();
+    if (!matches.size) {
+      swapData(a, b);
+      await animateSwap(a, b, true);
+      playSound('miss');
+      setMessage('Belum cocok. Buat 3 permata yang sama dalam satu baris atau kolom ya.');
+      busyRef.current = false;
       return;
     }
-    const timer = window.setInterval(() => setTimeLeft((t) => t - 1), 1000);
+
+    setMoves((m) => Math.max(0, m - 1));
+    setMessage('Mantap! Permatanya pecah!');
+    await resolveBoard();
+    busyRef.current = false;
+  };
+
+  const handleCellPointer = (r: number, c: number) => {
+    if (!playingRef.current || busyRef.current) return;
+    playSound('tap');
+    const current = { r, c };
+    const selected = selectedRef.current;
+
+    if (!selected) {
+      selectedRef.current = current;
+      boardRef.current[r][c].el.classList.add('jewel-selected');
+      setMessage('Pilih permata sebelahnya.');
+      return;
+    }
+
+    if (selected.r === r && selected.c === c) {
+      clearSelection();
+      setMessage('Pilih dua permata yang berdampingan.');
+      return;
+    }
+
+    if (!isAdjacent(selected, current)) {
+      clearSelection();
+      selectedRef.current = current;
+      boardRef.current[r][c].el.classList.add('jewel-selected');
+      setMessage('Harus permata yang menempel ya.');
+      return;
+    }
+
+    attemptSwap(selected, current);
+  };
+
+  const handleBoardPointer = (event: any) => {
+    const target = (event.target as HTMLElement).closest('.native-jewel-cell') as HTMLDivElement | null;
+    if (!target || !boardEl.current?.contains(target)) return;
+    const r = Number(target.dataset.r);
+    const c = Number(target.dataset.c);
+    if (!Number.isFinite(r) || !Number.isFinite(c) || !inBounds(r, c)) return;
+    handleCellPointer(r, c);
+  };
+
+  const buildBoard = () => {
+    const host = boardEl.current;
+    if (!host) return;
+
+    host.innerHTML = '';
+    boardRef.current = [];
+
+    for (let r = 0; r < ROWS; r += 1) {
+      boardRef.current[r] = [];
+      for (let c = 0; c < COLS; c += 1) {
+        const el = document.createElement('div');
+        el.className = 'native-jewel-cell';
+        el.setAttribute('role', 'button');
+        el.setAttribute('aria-label', `Jewel ${r + 1}-${c + 1}`);
+        el.dataset.r = String(r);
+        el.dataset.c = String(c);
+        const cell: Cell = { type: rand(TYPES), el };
+        boardRef.current[r][c] = cell;
+        host.appendChild(el);
+        renderCandy(cell);
+        runAnim(el, [
+          { transform: 'scale(.4)', opacity: 0 },
+          { transform: 'scale(1.08)', opacity: 1, offset: .72 },
+          { transform: 'scale(1)', opacity: 1 }
+        ], { duration: 300 + (r * COLS + c) * 7, easing: 'cubic-bezier(.22,1.25,.36,1)', fill: 'both' });
+      }
+    }
+
+    let safety = 0;
+    while (findMatches().size > 0 && safety < 80) {
+      for (let r = 0; r < ROWS; r += 1) {
+        for (let c = 0; c < COLS; c += 1) {
+          boardRef.current[r][c].type = rand(TYPES);
+          renderCandy(boardRef.current[r][c]);
+        }
+      }
+      safety += 1;
+    }
+  };
+
+  useEffect(() => {
+    buildBoard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    clearSelection();
+    busyRef.current = false;
+    setScore(0);
+    setMoves(START_MOVES);
+    setTimeLeft(45);
+    setMessage(playing ? 'Pilih dua permata yang berdampingan.' : 'Tekan Main, lalu pilih dua permata yang berdampingan.');
+    setComboText('');
+    buildBoard();
+
+    if (!playing) return;
+    playSound('start');
+    const timer = window.setInterval(() => {
+      setTimeLeft((t) => Math.max(0, t - 1));
+    }, 1000);
     return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing]);
 
   useEffect(() => {
-    if (playing && (timeLeft <= 0 || moves <= 0)) onDone();
+    if (playing && (timeLeft <= 0 || moves <= 0)) {
+      playSound('reward');
+      onDone();
+    }
   }, [playing, timeLeft, moves, onDone]);
 
-  const isAdjacent = (a: Pos, b: Pos) => Math.abs(a.r - b.r) + Math.abs(a.c - b.c) === 1;
-
-  const resolveBoard = (initialBoard: Cell[][]) => {
-    let current = initialBoard;
-    let combo = 0;
-    let totalScore = 0;
-    let latestMatches = new Set<string>();
-    while (true) {
-      const matches = findMatches(current);
-      if (!matches.size) break;
-      latestMatches = matches;
-      combo += 1;
-      totalScore += matches.size * 10 * combo;
-      current = collapseBoard(current, matches);
-    }
-    return { board: current, totalScore, combo, latestMatches };
-  };
-
-  const handleCellClick = (r: number, c: number) => {
-    if (!playing) return;
-    const pos = { r, c };
-    if (!selected) {
-      setSelected(pos);
-      return;
-    }
-    if (selected.r === pos.r && selected.c === pos.c) {
-      setSelected(null);
-      return;
-    }
-    if (!isAdjacent(selected, pos)) {
-      setSelected(pos);
-      return;
-    }
-    const swapped = swapAt(board, selected, pos);
-    const matches = findMatches(swapped);
-    if (!matches.size) {
-      setSelected(null);
-      setMessage('Belum cocok. Coba pasangan lain ya!');
-      return;
-    }
-    const resolved = resolveBoard(swapped);
-    setBoard(resolved.board);
-    setSelected(null);
-    setMoves((m) => Math.max(0, m - 1));
-    setScore((s) => s + resolved.totalScore);
-    setMatchFlash(resolved.latestMatches);
-    setMessage(resolved.combo > 1 ? `Combo x${resolved.combo}! Keren!` : 'Yes! Permatanya meledak!');
-    window.setTimeout(() => setMatchFlash(new Set()), 350);
-  };
-
   return (
-    <div className="game-card jewel-card">
+    <div className={`game-card native-jewel-card ${playing ? 'is-playing' : ''}`}>
       <div className="game-hud"><span>Score <b>{score}</b></span><span>Moves <b>{moves}</b></span><span>Time <b>{timeLeft}s</b></span></div>
-      <div className="jewel-board-wrap">
-        <div className="jewel-board">
-          {board.map((row, r) => row.map((cell, c) => {
-            const key = `${r}-${c}`;
-            const isSelected = selected?.r === r && selected?.c === c;
-            const isMatched = matchFlash.has(key);
-            return (
-              <button key={cell.id + key} className={`jewel-tile ${isSelected ? 'selected' : ''} ${isMatched ? 'matched' : ''}`} onClick={() => handleCellClick(r, c)} aria-label={`Jewel row ${r + 1} col ${c + 1}`}>
-                <span className={`jewel gem-${cell.type}`} />
-              </button>
-            );
-          }))}
-        </div>
+      <div className="native-jewel-stage">
+        <div className="native-jewel-board" ref={boardEl} onPointerDown={handleBoardPointer} />
+        {comboText && <div className="combo-badge">{comboText}</div>}
+        {!playing && <div className="game-idle-overlay"><strong>Siap main?</strong><span>Tekan tombol “Main 45 detik” dulu.</span></div>}
       </div>
       <p className="game-tip">{message}</p>
     </div>
   );
 }
+
 
 
 function MemoryGame({ playing, onDone }: { playing: boolean; onDone: () => void }) {

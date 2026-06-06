@@ -119,3 +119,12 @@ See `docs/CHILD_UX_AND_GAME_STRATEGY.md` for the child UX and game design policy
 - Improved clickable-card interaction depth: stronger hover lift, press compression, shimmer, and higher readable font weight.
 
 The app still avoids shipping copied official OSN questions in the public repository. The question bank is original OSN-style training content.
+
+
+## v0.8 Update
+
+- Switched child-facing typography to Google Font Sour Gummy.
+- Expanded question bank to 600 original OSN-style questions: 200 Matematika, 200 IPA, 200 IPS.
+- Rebuilt Jewel Splash as a DOM-based match-3 game inspired by the supplied HTML/CSS/JS mechanics: 8x8 board, adjacent swaps, match detection, pop animation, gravity drop, spawn animation, score, moves, and timer.
+- Added stronger native-feel sounds for tap, start, answer select, swap, match, fall, miss, reward, and star reveal.
+- Made clickable cards feel more game-like with deeper hover lift, press compression, shimmer, and stronger shadows.
