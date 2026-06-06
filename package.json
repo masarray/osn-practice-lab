@@ -1,9 +1,9 @@
 {
   "name": "osn-practice-lab",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.2.0",
   "type": "module",
-  "description": "OSN-style SD CBT practice app with audited playable match-3 game, Sour Gummy child UX, 600-question bank, sound effects, and reward celebration.",
+  "description": "OSN-style SD CBT practice app with 1,690 questions, including 300 harder OSN Challenge calibration items for Grade 5-to-6 preparation, SD subjects, and ANBK/AKM-style practice.",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

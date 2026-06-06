@@ -1,4 +1,4 @@
-export type Subject = 'Matematika' | 'IPA' | 'IPS';
+export type Subject = string;
 export type Difficulty = 'easy' | 'medium' | 'hard';
 export type AnswerKey = 'A' | 'B' | 'C' | 'D';
 

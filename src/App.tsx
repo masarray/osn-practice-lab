@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { allQuestions, bankStats, getQuestionsBySubject, getTopics, subjects } from './data';
 import type { AnswerKey, ExamConfig, ExamQuestion, ExamSession, Question, ResultRecord, ReviewItem, SessionMode, Subject } from './types';
 
-const STORAGE_KEY = 'osn-practice-lab-results-v1.0';
+const STORAGE_KEY = 'osn-practice-lab-results-v1.1';
 
 type Screen = 'home' | 'exam' | 'result' | 'reward' | 'admin';
 type GameKey = 'jewel' | 'memory' | 'bridge';
@@ -119,9 +119,30 @@ function makeExamQuestion(question: Question): ExamQuestion {
   return { question, options: shuffle(question.options) };
 }
 
+function isOsnSubject(subject: string) {
+  return ['Matematika', 'IPA', 'IPS'].includes(subject);
+}
+
+function difficultyRank(question: Question) {
+  if (question.tags?.includes('osn-challenge')) return 0;
+  if (question.difficulty === 'hard') return 1;
+  if (question.difficulty === 'medium') return 2;
+  return 3;
+}
+
 function selectQuestions(config: ExamConfig, progress: StoredProgress): ExamQuestion[] {
   let pool = getQuestionsBySubject(config.subject);
   if (config.topic) pool = pool.filter((q) => q.topic === config.topic);
+
+  const shouldUseOsnChallengeBias =
+    config.mode === 'simulation' &&
+    (config.subject === 'Campuran' || isOsnSubject(config.subject));
+
+  if (shouldUseOsnChallengeBias) {
+    const osnPool = pool.filter((q) => isOsnSubject(q.subject));
+    const sorted = shuffle(osnPool.length ? osnPool : pool).sort((a, b) => difficultyRank(a) - difficultyRank(b));
+    return sorted.slice(0, Math.min(config.questionCount, sorted.length)).map(makeExamQuestion);
+  }
 
   const wrongSet = new Set(progress.wrongQuestionIds);
   const wrongPool = pool.filter((q) => wrongSet.has(q.id));
@@ -150,17 +171,33 @@ function formatTime(seconds: number) {
 }
 
 function subjectAccent(subject: Subject | 'Campuran') {
-  if (subject === 'Matematika') return 'accent-math';
-  if (subject === 'IPA') return 'accent-ipa';
-  if (subject === 'IPS') return 'accent-ips';
-  return 'accent-mix';
+  const accents: Record<string, string> = {
+    Matematika: 'accent-math',
+    IPA: 'accent-ipa',
+    IPS: 'accent-ips',
+    IPAS: 'accent-ipa',
+    'Bahasa Indonesia': 'accent-sun',
+    'Bahasa Inggris': 'accent-sky',
+    'Pendidikan Pancasila': 'accent-lavender',
+    'ANBK Literasi': 'accent-sun',
+    'ANBK Numerasi': 'accent-math'
+  };
+  return accents[subject] ?? 'accent-mix';
 }
 
 function subjectIcon(subject: Subject | 'Campuran') {
-  if (subject === 'Matematika') return '🔢';
-  if (subject === 'IPA') return '🔬';
-  if (subject === 'IPS') return '🗺️';
-  return '🌈';
+  const icons: Record<string, string> = {
+    Matematika: '🔢',
+    IPA: '🔬',
+    IPS: '🗺️',
+    IPAS: '🌿',
+    'Bahasa Indonesia': '📖',
+    'Bahasa Inggris': '🗣️',
+    'Pendidikan Pancasila': '🤝',
+    'ANBK Literasi': '📚',
+    'ANBK Numerasi': '📊'
+  };
+  return icons[subject] ?? '🌈';
 }
 
 function scoreSession(session: ExamSession): ResultRecord {
@@ -480,10 +517,16 @@ function ModeCard({ icon, title, badge, text, accent, onClick }: { icon: string;
 }
 
 function SubjectCard({ subject, total, topics, onStart }: { subject: Subject; total: number; topics: number; onStart: () => void }) {
-  const labels: Record<Subject, string> = {
+  const labels: Record<string, string> = {
     Matematika: 'Penuh angka, pola, dan puzzle seru.',
     IPA: 'Eksperimen, makhluk hidup, dan energi.',
-    IPS: 'Peta, budaya, sejarah, dan cerita Indonesia.'
+    IPS: 'Peta, budaya, sejarah, dan cerita Indonesia.',
+    IPAS: 'Sains dan sosial dalam kehidupan sehari-hari.',
+    'Bahasa Indonesia': 'Cerita, ide pokok, kosakata, dan teks informasi.',
+    'Bahasa Inggris': 'Vocabulary, classroom language, dan teks pendek.',
+    'Pendidikan Pancasila': 'Nilai Pancasila, hak-kewajiban, dan gotong royong.',
+    'ANBK Literasi': 'Baca teks, ambil informasi, lalu simpulkan.',
+    'ANBK Numerasi': 'Data, tabel, uang, ukuran, dan soal kehidupan nyata.'
   };
   return (
     <button className={`subject-card ${subjectAccent(subject)}`} onClick={onStart}>
@@ -492,7 +535,7 @@ function SubjectCard({ subject, total, topics, onStart }: { subject: Subject; to
         <span className="subject-start-pill">Mulai</span>
       </div>
       <h3>{subject}</h3>
-      <p>{labels[subject]}</p>
+      <p>{labels[subject] ?? 'Latihan pilihan ganda dengan topik SD.'}</p>
       <div className="subject-meta"><span>{total} soal</span><span>{topics} topik</span></div>
     </button>
   );
@@ -502,7 +545,10 @@ function AdventurePanel({ onStart }: { onStart: (config: ExamConfig) => void }) 
   const adventures = [
     { icon: '🏝️', title: 'Pulau Bilangan', subject: 'Matematika' as Subject, topic: 'Bilangan', text: 'Buka level bilangan, pecahan, dan pola.' },
     { icon: '🧪', title: 'Lab Sains', subject: 'IPA' as Subject, topic: 'Makhluk Hidup', text: 'Masuk ke dunia tumbuhan, energi, dan bumi.' },
-    { icon: '🗺️', title: 'Jelajah Nusantara', subject: 'IPS' as Subject, topic: 'Geografi Indonesia', text: 'Temukan peta, budaya, sejarah, dan ekonomi.' }
+    { icon: '🗺️', title: 'Jelajah Nusantara', subject: 'IPS' as Subject, topic: 'Geografi Indonesia', text: 'Temukan peta, budaya, sejarah, dan ekonomi.' },
+    { icon: '📖', title: 'Taman Cerita', subject: 'Bahasa Indonesia' as Subject, topic: 'Membaca Pemahaman', text: 'Cari ide pokok dan informasi penting dari teks.' },
+    { icon: '📚', title: 'Misi Literasi ANBK', subject: 'ANBK Literasi' as Subject, topic: 'Literasi Membaca', text: 'Latihan baca stimulus seperti AKM/ANBK.' },
+    { icon: '📊', title: 'Misi Numerasi ANBK', subject: 'ANBK Numerasi' as Subject, topic: 'Numerasi Kontekstual', text: 'Latihan angka, tabel, ukuran, uang, dan data.' }
   ];
   return (
     <section className="panel adventure-panel">

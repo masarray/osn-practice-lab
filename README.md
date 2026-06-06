@@ -2,6 +2,32 @@
 
 OSN Practice Lab SD adalah web app latihan OSN-style untuk anak SD dengan pengalaman CBT yang ramah anak.
 
+## Status v1.1
+
+- 1.390 soal original practice:
+  - 200 Matematika OSN-style
+  - 200 IPA OSN-style
+  - 200 IPS OSN-style
+  - 160 IPAS SD
+  - 150 Bahasa Indonesia SD
+  - 120 Bahasa Inggris SD
+  - 120 Pendidikan Pancasila SD
+  - 120 ANBK Literasi AKM-style
+  - 120 ANBK Numerasi AKM-style
+- CBT simulation 60 soal
+- Daily Mission 10 soal
+- Try Again soal salah
+- Adventure Map
+- Reward Room dengan Jewel Splash, Memory Match, dan Bridge Quest
+- Local progress via LocalStorage
+- GitHub Pages workflow
+
+> Project ini bukan aplikasi resmi OSN/Puspresnas/ANBK. Bank soal adalah soal latihan original yang meniru pola kompetensi, bukan salinan soal resmi.
+
+# OSN Practice Lab SD
+
+OSN Practice Lab SD adalah web app latihan OSN-style untuk anak SD dengan pengalaman CBT yang ramah anak.
+
 Fokus project:
 
 - latihan harian 10 soal agar anak terbiasa mencoba sedikit demi sedikit;
@@ -128,3 +154,31 @@ The app still avoids shipping copied official OSN questions in the public reposi
 - Rebuilt Jewel Splash as a DOM-based match-3 game inspired by the supplied HTML/CSS/JS mechanics: 8x8 board, adjacent swaps, match detection, pop animation, gravity drop, spawn animation, score, moves, and timer.
 - Added stronger native-feel sounds for tap, start, answer select, swap, match, fall, miss, reward, and star reveal.
 - Made clickable cards feel more game-like with deeper hover lift, press compression, shimmer, and stronger shadows.
+
+
+## v1.1 Bank Expansion
+
+Question bank expanded to 1,390 original practice questions:
+
+- Matematika: 200 OSN-style questions
+- IPA: 200 OSN-style questions
+- IPS: 200 OSN-style questions
+- IPAS: 160 SD curriculum practice questions
+- Bahasa Indonesia: 150 SD curriculum practice questions
+- Bahasa Inggris: 120 SD curriculum practice questions
+- Pendidikan Pancasila: 120 SD curriculum practice questions
+- ANBK Literasi: 120 AKM-style literacy questions
+- ANBK Numerasi: 120 AKM-style numeracy questions
+
+All new questions are original practice items. They are not copied from official OSN/ANBK papers. Official past-paper imports should be kept local/private unless licensing is clear.
+
+
+## v1.2 OSN Challenge Calibration
+
+Child testing showed the earlier OSN bank was too easy for a Grade 5 student moving to Grade 6. This release recalibrates OSN practice.
+
+- Total bank: **1690 questions**.
+- Added **300 harder OSN Challenge items**: 100 Matematika, 100 IPA, 100 IPS.
+- OSN Simulation now prioritizes `osn-challenge` and `hard` questions first.
+- Daily Mission remains lighter to preserve the habit-building loop.
+- See `docs/OSN_CHALLENGE_CALIBRATION_V1_2.md`.
