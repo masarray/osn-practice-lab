@@ -1,0 +1,17 @@
+{
+  "name": "OSN Practice Lab SD",
+  "short_name": "OSN Lab",
+  "description": "Latihan OSN SD dengan CBT simulation, review jawaban, dan reward mini game.",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4efe5",
+  "theme_color": "#315c6f",
+  "icons": [
+    {
+      "src": "./icons/osn-practice-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
